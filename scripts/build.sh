@@ -21,27 +21,35 @@ swift build --package-path "$ROOT" -c release --arch arm64
 BIN="$(swift build --package-path "$ROOT" -c release --arch arm64 --show-bin-path)/$APP_NAME"
 
 step "Assembling $APP_NAME.app"
-rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/$APP_NAME"
+# Put together and signed in a temporary folder, then copied into ./build: iCloud Drive (a
+# synced Documents folder, say) tags files with extended attributes that codesign refuses to
+# sign over, and can add them again faster than they can be cleared. Tags added afterwards
+# don't affect the signature.
+STAGE="$(mktemp -d)"
+trap 'rm -rf "$STAGE"' EXIT
+STAGED="$STAGE/$APP_NAME.app"
+mkdir -p "$STAGED/Contents/MacOS" "$STAGED/Contents/Resources"
+cp "$BIN" "$STAGED/Contents/MacOS/$APP_NAME"
 # Local symbols only bloat the binary; crash reports keep the global ones.
-strip -x "$APP/Contents/MacOS/$APP_NAME"
-cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
-cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/"
-cp "$ROOT/LICENSE" "$APP/Contents/Resources/LICENSE.txt"
+strip -x "$STAGED/Contents/MacOS/$APP_NAME"
+cp "$ROOT/Resources/Info.plist" "$STAGED/Contents/Info.plist"
+cp "$ROOT/Resources/AppIcon.icns" "$STAGED/Contents/Resources/"
+cp "$ROOT/LICENSE" "$STAGED/Contents/Resources/LICENSE.txt"
+xattr -cr "$STAGED"
 
 step "Signing"
-# Finder and iCloud Drive tag files with extended attributes that codesign refuses to sign over.
-xattr -cr "$APP"
 SIGN_HASH="$(security find-identity -p codesigning 2>/dev/null \
   | awk -v name="\"$SIGN_IDENTITY\"" 'index($0, name) {print $2; exit}')"
 if [ -n "$SIGN_HASH" ]; then
-  codesign --force --sign "$SIGN_HASH" "$APP"
+  codesign --force --sign "$SIGN_HASH" "$STAGED"
   echo "Signed with \"$SIGN_IDENTITY\""
 else
-  codesign --force --sign - "$APP"
+  codesign --force --sign - "$STAGED"
   echo "Signed ad hoc: no \"$SIGN_IDENTITY\" certificate, so macOS permissions reset on every rebuild"
 fi
+rm -rf "$APP"
+mkdir -p "$(dirname "$APP")"
+ditto --noextattr "$STAGED" "$APP"
 
 echo
 echo "Built $APP ($(du -sh "$APP" | cut -f1))"

@@ -99,6 +99,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggle.target = self
         toggle.state = prefs.isEnabled ? .on : .off
         menu.addItem(toggle)
+        let style = NSMenuItem(title: "Style", action: nil, keyEquivalent: "")
+        let styles = NSMenu()
+        for option in LidStyle.allCases {
+            let item = NSMenuItem(title: option.label, action: #selector(pickStyle(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = option.rawValue
+            item.state = prefs.style == option ? .on : .off
+            styles.addItem(item)
+        }
+        style.submenu = styles
+        menu.addItem(style)
         let play = NSMenuItem(title: "Play It Now", action: #selector(playNow), keyEquivalent: "")
         play.target = self
         menu.addItem(play)
@@ -114,6 +125,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleEnabled() {
         prefs.isEnabled.toggle()
+    }
+
+    @objc private func pickStyle(_ sender: NSMenuItem) {
+        prefs.style = LidStyle(rawValue: sender.tag) ?? .glass
     }
 
     @objc private func playNow() {

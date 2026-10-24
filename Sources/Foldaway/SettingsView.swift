@@ -100,7 +100,13 @@ private struct SettingsView: View {
                 if hasSensor {
                     Toggle(isOn: $prefs.isEnabled) {
                         Text("Close the screen with the lid")
-                        Text("As you close the lid, the screen turns to frosted glass and swings shut ahead of it.")
+                        Text("As you close the lid, the screen closes ahead of it, in the style below.")
+                    }
+                    Picker(selection: $prefs.style) {
+                        ForEach(LidStyle.allCases) { Text($0.label).tag($0) }
+                    } label: {
+                        Text("Style")
+                        Text(prefs.style.detail)
                     }
                     LabeledContent {
                         HStack {

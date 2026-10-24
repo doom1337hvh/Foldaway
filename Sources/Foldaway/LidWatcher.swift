@@ -224,11 +224,13 @@ final class LidWatcher: NSObject {
         isPreparing = true
         let scale = screen.backingScaleFactor
         let notch = screen.notchRect
+        // The README's clips show the made-up desktop's wallpaper, not yours.
+        let wallpaper = prefs.style == .lockScreen && DemoScene.current == nil
+            ? NSWorkspace.shared.desktopImageURL(for: screen) : nil
         Task { @MainActor in
-            // In the README's clips, the real pointer isn't part of the scene.
-            let snapshot = await ScreenSnapshot.capture(displayID, pointer: DemoScene.current == nil)
+            let snapshot = await ScreenSnapshot.capture(displayID)
             let frost = await Task.detached(priority: .userInitiated) {
-                snapshot.flatMap { Frost.make(from: $0, pointScale: scale, notch: notch) }
+                snapshot.flatMap { Frost.make(from: $0, pointScale: scale, notch: notch, wallpaper: wallpaper) }
             }.value
             isPreparing = false
             if let frost {
@@ -271,7 +273,7 @@ final class LidWatcher: NSObject {
         if overlay == nil {
             guard !isDone else { return letGo() }
             guard goal > 0.001, let frost, let screen = NSScreen.builtIn else { return }
-            overlay = LidOverlay(frost: frost, screen: screen)
+            overlay = LidOverlay(frost: frost, screen: screen, style: prefs.style)
         }
         // Fades in over a third of a second, however far the lid has already moved, and out
         // the same way.
@@ -279,8 +281,8 @@ final class LidWatcher: NSObject {
         let fadeIn = Self.smoothstep(presence)
         overlay?.setOpacity(Self.smoothstep(min(presence * 2, 1)))
         overlay?.setProgress(shown * fadeIn)
-        // The picture has the pointer in it; the real one hides once the glass covers it, and
-        // comes back before the glass goes.
+        // The overlay draws a live pointer; the real one hides once the overlay covers it, and
+        // comes back before the overlay goes.
         if presence >= 1 { Pointer.hide() } else if isDone { Pointer.show() }
 
         if isDone, presence <= 0 {

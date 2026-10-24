@@ -3,9 +3,8 @@ import ScreenCaptureKit
 
 /// Takes a picture of a whole display with ScreenCaptureKit.
 enum ScreenSnapshot {
-    /// The display at full resolution, normally pointer and all: the glass takes the pointer
-    /// with it, and the real one hides while the glass is up.
-    static func capture(_ displayID: CGDirectDisplayID, pointer: Bool = true) async -> CGImage? {
+    /// The display at full resolution, without the pointer: the overlay draws a live one.
+    static func capture(_ displayID: CGDirectDisplayID) async -> CGImage? {
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
             guard let display = content.displays.first(where: { $0.displayID == displayID }) else { return nil }
@@ -15,7 +14,7 @@ enum ScreenSnapshot {
             configuration.width = Int((filter.contentRect.width * scale).rounded())
             configuration.height = Int((filter.contentRect.height * scale).rounded())
             configuration.captureResolution = .best
-            configuration.showsCursor = pointer
+            configuration.showsCursor = false
             return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
         } catch {
             return nil

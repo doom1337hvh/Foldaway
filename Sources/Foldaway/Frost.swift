@@ -1,5 +1,6 @@
 import AppKit
 import CoreImage
+import ImageIO
 
 /// The picture of the screen the glass is made from: sharp, plus a few ever more blurred
 /// copies to blend between, so the blur can grow smoothly from the hinge to the top edge.
@@ -13,6 +14,8 @@ struct Frost: @unchecked Sendable {
     let sharp: CGImage
     /// From least to most blurred.
     let levels: [Level]
+    /// The desktop picture, heavily blurred, for the Lock screen style.
+    var wallpaper: CGImage?
 
     /// Blur radii in points. Each is made from a smaller copy of the picture, since a blurred
     /// picture needs few pixels; that keeps it quick.
@@ -24,7 +27,8 @@ struct Frost: @unchecked Sendable {
     /// - Parameters:
     ///   - pointScale: pixels per point.
     ///   - notch: the notch, in points from the top-left corner, if there is one.
-    static func make(from snapshot: CGImage, pointScale: CGFloat, notch: CGRect?) -> Frost? {
+    ///   - wallpaper: the desktop picture's file, to blur for the Lock screen style.
+    static func make(from snapshot: CGImage, pointScale: CGFloat, notch: CGRect?, wallpaper: URL? = nil) -> Frost? {
         guard let sharp = shaped(snapshot, pointScale: pointScale, notch: notch) else { return nil }
         let input = CIImage(cgImage: sharp)
         var levels: [Level] = []
@@ -38,7 +42,22 @@ struct Frost: @unchecked Sendable {
             guard let image = context.createCGImage(blurred, from: small.extent) else { return nil }
             levels.append(Level(image: image, radius: points))
         }
-        return Frost(sharp: sharp, levels: levels)
+        return Frost(sharp: sharp, levels: levels,
+                     wallpaper: wallpaper.flatMap { blurredWallpaper($0, longestSide: max(sharp.width, sharp.height)) })
+    }
+
+    /// The desktop picture, small and heavily blurred. Nil for one that isn't a still image,
+    /// like a dynamic or video wallpaper; the Lock screen style then blurs the screen instead.
+    private static func blurredWallpaper(_ url: URL, longestSide: Int) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                  kCGImageSourceThumbnailMaxPixelSize: longestSide / 8,
+              ] as CFDictionary)
+        else { return nil }
+        let input = CIImage(cgImage: image)
+        let blurred = input.clampedToExtent().applyingGaussianBlur(sigma: 10).cropped(to: input.extent)
+        return context.createCGImage(blurred, from: input.extent)
     }
 
     private static func shaped(_ snapshot: CGImage, pointScale: CGFloat, notch: CGRect?) -> CGImage? {

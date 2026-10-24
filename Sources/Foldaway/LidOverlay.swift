@@ -1,43 +1,27 @@
 import AppKit
 import QuartzCore
 
-/// A window over the whole built-in screen in which the screen becomes a pane of frosted glass
-/// that swings shut on the hinge, ahead of the real lid. The further the glass gets from where
-/// the screen was, the more it blurs, frosts over and darkens, the top edge most; behind it is
-/// black, as if the screen had already closed.
+/// A window over the whole built-in screen in which the screen closes ahead of the real lid, in
+/// the chosen style (see LidStyles.swift). Behind it is black, as if the screen had already
+/// closed.
 @MainActor
 final class LidOverlay {
-    /// How far the pane swings toward you when the lid is all but shut, in radians.
-    private static let maxTilt = 72 * CGFloat.pi / 180
-    /// The blur at the pane's top edge once the frost is at full strength, in points.
-    private static let maxBlur: CGFloat = 36
-    /// How the blur grows from the hinge to the top: above 1, the bottom stays sharp longer.
-    private static let blurCurve: CGFloat = 1.7
-
     let screen: NSScreen
     private let window: NSWindow
-    /// Gives the pane perspective, as seen from about where you sit.
-    private let stage = CALayer()
-    /// The glass, hinged along the bottom of the screen.
-    private let pane = CALayer()
-    /// Ever more blurred copies of the screen over the sharp one, each shown from the height
-    /// at which the blur reaches its radius.
-    private var levels: [(mask: CAGradientLayer, radius: CGFloat)] = []
-    private let haze = CAGradientLayer()
-    private let shade = CAGradientLayer()
-    private let sheen = CAGradientLayer()
-    /// Melts the top edge into the black behind, rather than ending in a hard line.
-    private let edge = CAGradientLayer()
+    private let effect: LidEffect
+    /// A live pointer, drawn into the effect so it moves with the screen as it closes, while
+    /// the real one is hidden. None in the README's clips.
+    private let pointer: CALayer?
     private let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-    /// How visible the glass is against the black, kept from changing faster than over a
+    /// How visible the effect is against the black, kept from changing faster than over a
     /// quarter of a second, so coming back from black is as gentle as going to it.
     private var brightness: CGFloat = 1
     private var lastUpdate: CFTimeInterval?
 
-    /// Whether the glass has gone fully dark.
+    /// Whether the screen has gone fully dark.
     var isDark: Bool { brightness < 0.01 }
 
-    init(frost: Frost, screen: NSScreen) {
+    init(frost: Frost, screen: NSScreen, style: LidStyle) {
         self.screen = screen
         let frame = screen.frame
         window = OverlayWindow(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
@@ -57,52 +41,34 @@ final class LidOverlay {
         view.wantsLayer = true
         view.layer?.backgroundColor = .black
         window.contentView = view
-        let scale = window.backingScaleFactor
-        let size = frame.size
-
-        stage.frame = view.bounds
-        var perspective = CATransform3DIdentity
-        // About an arm's length away: 2.8 screen heights.
-        perspective.m34 = -1 / (2.8 * size.height)
-        stage.sublayerTransform = perspective
-        view.layer?.addSublayer(stage)
-
-        pane.bounds = CGRect(origin: .zero, size: size)
-        pane.anchorPoint = CGPoint(x: 0.5, y: 0)
-        pane.position = CGPoint(x: size.width / 2, y: 0)
-        pane.contents = frost.sharp
-        pane.contentsScale = scale
-        pane.masksToBounds = true
-        pane.cornerRadius = 10
-        pane.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
-        stage.addSublayer(pane)
-
-        for level in frost.levels {
-            let layer = CALayer()
-            layer.frame = pane.bounds
-            layer.contents = level.image
-            layer.contentsScale = scale
-            let mask = CAGradientLayer()
-            mask.frame = layer.bounds
-            mask.colors = [CGColor(gray: 0, alpha: 0), CGColor(gray: 0, alpha: 1)]
-            layer.mask = mask
-            pane.addSublayer(layer)
-            levels.append((mask, level.radius))
+        // The notch in layer coordinates, which count from the bottom.
+        let notch = screen.notchRect.map {
+            CGRect(x: $0.minX, y: frame.height - $0.maxY, width: $0.width, height: $0.height)
         }
-        // Gradients run from the hinge (0) to the top edge (1).
-        for layer in [haze, shade, sheen, edge] {
-            layer.frame = pane.bounds
-            layer.startPoint = CGPoint(x: 0.5, y: 0)
-            layer.endPoint = CGPoint(x: 0.5, y: 1)
-            layer.contentsScale = scale
-            pane.addSublayer(layer)
+        effect = style.makeEffect(EffectCanvas(frost: frost, size: frame.size, scale: window.backingScaleFactor,
+                                               notch: notch))
+        effect.layer.frame = view.bounds
+        view.layer?.addSublayer(effect.layer)
+        if DemoScene.current == nil {
+            // Whichever pointer is showing: the arrow, a text cursor, and so on.
+            let cursor = NSCursor.currentSystem ?? .arrow
+            let image = cursor.image
+            let pointer = CALayer()
+            pointer.bounds = CGRect(origin: .zero, size: image.size)
+            // The hot spot counts from the top left; layers count from the bottom.
+            pointer.anchorPoint = CGPoint(x: cursor.hotSpot.x / image.size.width, y: 1 - cursor.hotSpot.y / image.size.height)
+            pointer.contentsScale = window.backingScaleFactor
+            pointer.contents = Self.bitmap(image, scale: window.backingScaleFactor)
+            self.pointer = pointer
+        } else {
+            pointer = nil
         }
         setProgress(0)
         CATransaction.flush()
         window.orderFrontRegardless()
     }
 
-    /// Shows the glass `progress` of the way shut: 0 is the screen as it really is, 1 is
+    /// Shows the screen `progress` of the way shut: 0 is the screen as it really is, 1 is
     /// closed and dark.
     func setProgress(_ progress: Double) {
         let p = CGFloat(min(max(progress, 0), 1))
@@ -111,63 +77,54 @@ final class LidOverlay {
         defer { CATransaction.commit() }
         if reduceMotion {
             // With Reduce Motion, the screen only dims.
+            effect.setProgress(0)
+            movePointer()
             brightness = 1 - p
-            pane.opacity = Float(brightness)
+            effect.layer.opacity = Float(brightness)
             return
         }
-        // Tips slowly at first and faster toward the end, like the last stretch of a closing
-        // lid, so it only looks shut as the lid really shuts.
-        let closing = pow(p, 2.2)
-        pane.transform = CATransform3DMakeRotation(Self.maxTilt * closing, 1, 0, 0)
-
-        // The frost builds over most of the way, reaching full strength near the end.
-        let frost = Self.smoothstep(0, 0.85, p)
-        // Blur grows from nothing at the hinge to `maxBlur` at the top: each copy fades in
-        // between the height where the blur reaches the previous copy's radius and its own.
-        let topBlur = max(Self.maxBlur * frost, 0.001)
-        func height(forBlur radius: CGFloat) -> CGFloat { pow(radius / topBlur, 1 / Self.blurCurve) }
-        var previous: CGFloat = 0
-        for (mask, radius) in levels {
-            let start = height(forBlur: previous)
-            let end = max(height(forBlur: radius), start + 0.001)
-            mask.startPoint = CGPoint(x: 0.5, y: start)
-            mask.endPoint = CGPoint(x: 0.5, y: end)
-            previous = radius
-        }
-        // Frosted white, more toward the top.
-        haze.colors = [CGColor(srgbRed: 0.86, green: 0.87, blue: 0.9, alpha: 0),
-                       CGColor(srgbRed: 0.86, green: 0.87, blue: 0.9, alpha: 0.22 * frost)]
-        // Darker as it turns away from you.
-        shade.colors = [CGColor(gray: 0, alpha: 0.06 * closing), CGColor(gray: 0, alpha: 0.12 * frost + 0.5 * closing)]
-        // A soft band of light that slides down the glass as it tips.
-        let band = 1 - 0.7 * closing
-        sheen.colors = [CGColor(gray: 1, alpha: 0), CGColor(gray: 1, alpha: 0.1 * frost * (1 - closing)), CGColor(gray: 1, alpha: 0)]
-        sheen.locations = [NSNumber(value: Double(band - 0.18)), NSNumber(value: Double(band)), NSNumber(value: Double(band + 0.12))]
-        // The top edge slips into the dark, over more of the pane the further it's tipped.
-        let fade = 0.05 + 0.25 * closing
-        edge.colors = [CGColor(gray: 0, alpha: 0), CGColor(gray: 0, alpha: min(1, 0.2 + frost))]
-        edge.locations = [NSNumber(value: Double(1 - fade)), 1]
+        effect.setProgress(p)
+        movePointer()
         // Over the last stretch it goes dark, as the screen would going out of sight.
         let now = CACurrentMediaTime()
         let step = lastUpdate.map { CGFloat(min(now - $0, 0.05)) } ?? 0
         lastUpdate = now
-        let change = 1 - Self.smoothstep(0.82, 1, p) - brightness
+        let change = 1 - smoothstep(effect.darkFrom, 1, p) - brightness
         brightness += min(max(change, -step / 0.25), step / 0.25)
-        pane.opacity = Float(brightness)
+        effect.layer.opacity = Float(brightness)
     }
 
-    /// How much the glass covers the real screen, for fading in and out.
+    /// The pointer's picture, drawn out: macOS's pointer images are drawn on demand, which a
+    /// layer can't do by itself.
+    private static func bitmap(_ image: NSImage, scale: CGFloat) -> CGImage? {
+        guard let context = CGContext(data: nil, width: Int(image.size.width * scale), height: Int(image.size.height * scale),
+                                      bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        context.scaleBy(x: scale, y: scale)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        image.draw(in: CGRect(origin: .zero, size: image.size))
+        NSGraphicsContext.restoreGraphicsState()
+        return context.makeImage()
+    }
+
+    /// Puts the drawn pointer where the mouse is now, on the closing screen.
+    private func movePointer() {
+        guard let pointer else { return }
+        let mouse = NSEvent.mouseLocation
+        let point = CGPoint(x: mouse.x - screen.frame.minX, y: mouse.y - screen.frame.minY)
+        pointer.isHidden = !CGRect(origin: .zero, size: screen.frame.size).contains(point)
+        effect.place(pointer: pointer, at: point)
+    }
+
+    /// How much the effect covers the real screen, for fading in and out.
     func setOpacity(_ opacity: Double) {
         window.alphaValue = CGFloat(min(max(opacity, 0), 1))
     }
 
     func close() {
         window.orderOut(nil)
-    }
-
-    private static func smoothstep(_ edge0: CGFloat, _ edge1: CGFloat, _ x: CGFloat) -> CGFloat {
-        let t = min(max((x - edge0) / (edge1 - edge0), 0), 1)
-        return t * t * (3 - 2 * t)
     }
 }
 
@@ -177,4 +134,13 @@ private final class OverlayWindow: NSWindow {
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
         frameRect
     }
+}
+
+func smoothstep(_ edge0: CGFloat, _ edge1: CGFloat, _ x: CGFloat) -> CGFloat {
+    let t = min(max((x - edge0) / (edge1 - edge0), 0), 1)
+    return t * t * (3 - 2 * t)
+}
+
+func lerp(_ from: CGFloat, _ to: CGFloat, _ t: CGFloat) -> CGFloat {
+    from + (to - from) * t
 }

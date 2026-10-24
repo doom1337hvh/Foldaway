@@ -12,6 +12,12 @@ enum DemoScene: String {
     case opening
     /// The lid stops partway, and the glass swings back open.
     case partway
+    /// A close and an open in each of the other styles (the style comes from the
+    /// `-lidStyle` launch argument).
+    case notch
+    case fold
+    case lockScreen = "lock-screen"
+    case tv
     case settings
 
     /// The scene asked for on the command line, if any. (`-demo tour` lands in UserDefaults'
@@ -23,7 +29,7 @@ enum DemoScene: String {
     /// length, so keep the two in step.
     var lid: [(time: Double, angle: Double)] {
         switch self {
-        case .tour: [(0, 118), (0.4, 118), (2.8, 0), (3.0, 0), (5.0, 118)]
+        case .tour, .notch, .fold, .lockScreen, .tv: [(0, 118), (0.4, 118), (2.8, 0), (3.0, 0), (5.0, 118)]
         case .closing: [(0, 118), (0.4, 118), (3.4, 0)]
         case .opening: [(-2.4, 118), (-2.2, 118), (-1.5, 0), (-0.4, 0), (1.8, 118)]
         case .partway: [(0, 118), (0.5, 118), (1.5, 70)]

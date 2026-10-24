@@ -48,6 +48,7 @@ let preRoll = 0.8
 /// scene shows no menu bar icon either way.)
 let settings = [
     "isEnabled": "<true/>", "unfoldOnOpen": "<true/>", "closeAngle": "<real>10</real>", "showMenuBarIcon": "<true/>",
+    "lidStyle": "<integer>0</integer>",
 ]
 
 // MARK: The scenes
@@ -66,6 +67,8 @@ struct Scene {
     var isSettings = false
     /// The README's main clip, also written as an MP4.
     var isTour = false
+    /// Settings of its own, on top of `settings`.
+    var extraSettings: [String: String] = [:]
 
     var output: URL {
         root.appendingPathComponent(isTour ? "docs/demo.gif" : "docs/clips/\(name).gif")
@@ -73,15 +76,19 @@ struct Scene {
 }
 
 // The "Screen is shut by" slider, from the Settings window's top left: 10° at x 283, 30° at
-// x 352, y 160.
+// x 352, y 227.
 let scenes: [Scene] = [
     Scene(name: "tour", length: 5.7, isTour: true),
     Scene(name: "closing", length: 3.6),
     Scene(name: "opening", length: 2.8),
     Scene(name: "partway", length: 4.0),
+    Scene(name: "notch", length: 5.7, extraSettings: ["lidStyle": "<integer>1</integer>"]),
+    Scene(name: "fold", length: 5.7, extraSettings: ["lidStyle": "<integer>2</integer>"]),
+    Scene(name: "lock-screen", length: 5.7, extraSettings: ["lidStyle": "<integer>4</integer>"]),
+    Scene(name: "tv", length: 5.7, extraSettings: ["lidStyle": "<integer>5</integer>"]),
     Scene(name: "settings", length: 6.0,
-          path: [(-1, 250, 420), (0.4, 250, 420), (1.3, 283, 160), (1.6, 283, 160), (2.6, 352, 160), (3.8, 352, 160),
-                 (4.8, 283, 160), (5.6, 250, 420)],
+          path: [(-1, 250, 480), (0.4, 250, 480), (1.3, 283, 227), (1.6, 283, 227), (2.6, 352, 227), (3.8, 352, 227),
+                 (4.8, 283, 227), (5.6, 250, 480)],
           drags: [1.5...2.65, 3.75...4.85], isSettings: true),
 ]
 
@@ -198,7 +205,7 @@ func launch(_ scene: Scene) async throws -> pid_t {
     let running = { Set(NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).map(\.processIdentifier)) }
     let before = running()
     run("/usr/bin/open", ["-n", appBundle.path, "--args", "-demo", scene.name, "-demoClock", clockFile.path]
-        + settings.sorted { $0.key < $1.key }.flatMap { ["-\($0.key)", $0.value] })
+        + settings.merging(scene.extraSettings) { $1 }.sorted { $0.key < $1.key }.flatMap { ["-\($0.key)", $0.value] })
     for _ in 0..<50 {
         if let pid = running().subtracting(before).first { return pid }
         try await Task.sleep(for: .milliseconds(100))
