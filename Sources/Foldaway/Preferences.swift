@@ -39,6 +39,7 @@ final class Preferences {
         static let isEnabled = "isEnabled"
         static let unfoldOnOpen = "unfoldOnOpen"
         static let closeAngle = "closeAngle"
+        static let startAngle = "startAngle"
         static let style = "lidStyle"
         static let showMenuBarIcon = "showMenuBarIcon"
     }
@@ -63,6 +64,13 @@ final class Preferences {
         didSet { save(closeAngle, Key.closeAngle) }
     }
     static let closeAngles = 5.0...45.0
+    /// The lid angle where the screen starts to close, in degrees; above it, adjusting the
+    /// screen does nothing. At the top of the range, it starts as soon as the lid moves.
+    var startAngle: Double {
+        didSet { save(startAngle, Key.startAngle) }
+    }
+    static let startAngles = 30.0...130.0
+    var startsRightAway: Bool { startAngle >= Self.startAngles.upperBound }
     var style: LidStyle {
         didSet { save(style.rawValue, Key.style) }
     }
@@ -78,6 +86,9 @@ final class Preferences {
             Key.isEnabled: true,
             Key.unfoldOnOpen: true,
             Key.closeAngle: 10.0,
+            // Well below where anyone works with the screen, so tilting an open screen back
+            // and forth never sets it off, and still 60° to close in.
+            Key.startAngle: 70.0,
             Key.style: LidStyle.glass.rawValue,
             Key.showMenuBarIcon: true,
         ])
@@ -85,6 +96,8 @@ final class Preferences {
         unfoldOnOpen = defaults.bool(forKey: Key.unfoldOnOpen)
         closeAngle = min(max(defaults.double(forKey: Key.closeAngle), Self.closeAngles.lowerBound),
                          Self.closeAngles.upperBound)
+        startAngle = min(max(defaults.double(forKey: Key.startAngle), Self.startAngles.lowerBound),
+                         Self.startAngles.upperBound)
         showMenuBarIcon = defaults.bool(forKey: Key.showMenuBarIcon)
         style = LidStyle(rawValue: defaults.integer(forKey: Key.style)) ?? .glass
     }

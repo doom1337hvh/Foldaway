@@ -161,7 +161,10 @@ final class LidWatcher: NSObject {
             guard let oldest = history.first, now - oldest.time >= 0.05,
                   (angle - oldest.angle) / (now - oldest.time) < -15
             else { return }
-            restAngle = min(max(history.map(\.angle).max() ?? angle, prefs.closeAngle + 40), 140)
+            // Open from where the lid rested before it started closing, or from the angle set
+            // in "Starts at" if the lid was above it; always with some way to go.
+            let rested = min(max(history.map(\.angle).max() ?? angle, prefs.closeAngle + 40), 140)
+            restAngle = max(prefs.startsRightAway ? rested : min(rested, prefs.startAngle), prefs.closeAngle + 15)
             follow()
         case .shut:
             if angle > prefs.closeAngle + 3 {

@@ -48,7 +48,7 @@ let preRoll = 0.8
 /// scene shows no menu bar icon either way.)
 let settings = [
     "isEnabled": "<true/>", "unfoldOnOpen": "<true/>", "closeAngle": "<real>10</real>", "showMenuBarIcon": "<true/>",
-    "lidStyle": "<integer>0</integer>",
+    "lidStyle": "<integer>0</integer>", "startAngle": "<real>130</real>",
 ]
 
 // MARK: The scenes
@@ -75,8 +75,8 @@ struct Scene {
     }
 }
 
-// The "Screen is shut by" slider, from the Settings window's top left: 10° at x 283, 30° at
-// x 352, y 227.
+// The "Starts at" slider, from the Settings window's top left: 70° at x 304, Right away at
+// x 369, y 214.
 let scenes: [Scene] = [
     Scene(name: "tour", length: 5.7, isTour: true),
     Scene(name: "closing", length: 3.6),
@@ -87,9 +87,9 @@ let scenes: [Scene] = [
     Scene(name: "lock-screen", length: 5.7, extraSettings: ["lidStyle": "<integer>4</integer>"]),
     Scene(name: "tv", length: 5.7, extraSettings: ["lidStyle": "<integer>5</integer>"]),
     Scene(name: "settings", length: 6.0,
-          path: [(-1, 250, 480), (0.4, 250, 480), (1.3, 283, 227), (1.6, 283, 227), (2.6, 352, 227), (3.8, 352, 227),
-                 (4.8, 283, 227), (5.6, 250, 480)],
-          drags: [1.5...2.65, 3.75...4.85], isSettings: true),
+          path: [(-1, 250, 470), (0.4, 250, 470), (1.3, 304, 214), (1.6, 304, 214), (2.6, 369, 214), (3.8, 369, 214),
+                 (4.8, 304, 214), (5.6, 250, 470)],
+          drags: [1.5...2.65, 3.75...4.85], isSettings: true, extraSettings: ["startAngle": "<real>70</real>"]),
 ]
 
 func pointer(_ scene: Scene, at t: Double) -> (point: CGPoint, pressed: Bool)? {

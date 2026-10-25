@@ -27,7 +27,7 @@ Foldaway follows your MacBook's lid as you close it. The moment the lid starts t
 - **Five styles:** Frosted glass, Into the notch, Fold, Lock screen and TV off. See [In action](#in-action).
 - **Follows the real lid:** Foldaway reads the MacBook's lid angle sensor to a hundredth of a degree, so the screen closes exactly as fast as your hand moves, and stops when it stops.
 - **Frosted glass:** the blur grows from the hinge to the top edge, with a frosted haze and a soft band of light sliding down the glass. The area near the hinge stays sharp longest. The glass tips toward you in real perspective, as seen from about where you sit, and has the same notch and rounded corners as your screen.
-- **Closes before the lid:** the screen is dark by 10°, before the lid shuts. Choose the angle yourself, from 5° to 45°.
+- **Closes before the lid:** the screen starts closing as the lid passes 70° and is dark by 10°, before the lid shuts. Tilting an open screen never sets it off. Choose both angles yourself.
 - **Opens with the lid too**, or the screen can simply appear as you open it.
 - **Smooth from end to end:** the effect fades in as the lid starts moving and fades out once it's open, and never jumps to or from black.
 - **A live pointer:** the pointer keeps following your mouse while the screen closes, and goes along with it: it tips with the glass, folds with the fold, shrinks into the notch.
@@ -126,12 +126,13 @@ Open Settings from the laptop in the menu bar, or by opening Foldaway again whil
 
 <details>
 <summary><b>See the Settings window</b></summary>
-<p align="center"><img src="docs/clips/settings.gif" width="560" alt="The Settings window, with the style set to Frosted glass, dragging the Screen is shut by slider from 10 to 30 degrees and back"></p>
+<p align="center"><img src="docs/clips/settings.gif" width="560" alt="The Settings window, with the style set to Frosted glass, dragging the Starts at slider from 70 degrees up to Right away and back"></p>
 </details>
 
 **Lid**
 - **Close the screen with the lid** (on by default): the main switch, also in the menu bar menu.
 - **Style:** Frosted glass (default), Into the notch, Fold, Lock screen or TV off. Also in the menu bar menu.
+- **Starts at** (70° by default): above this lid angle, nothing happens, so tilting the screen while you work never sets the effect off. All the way right, *Right away*, it starts as soon as the lid moves.
 - **Screen is shut by** (10° by default): the lid angle where the screen has closed. Lower closes it together with the lid; higher closes it well before.
 - **Open it with the lid too** (on by default): opening the lid plays the effect in reverse. When off, the screen just appears.
 - **Try it → Play It Now:** closes and opens the screen without touching the lid. Also in the menu bar menu.

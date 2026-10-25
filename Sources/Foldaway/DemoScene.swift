@@ -37,16 +37,17 @@ enum DemoScene: String {
         }
     }
 
-    /// The Settings scene drags the "Screen is shut by" slider up to 30° and back, 30 times
-    /// a second.
+    /// The Settings scene drags the "Starts at" slider from 70° up to Right away and back, 30
+    /// times a second.
     private static var sliderSteps: [(time: Double, angle: Double)] {
         func drag(from: Double, to: Double, start: Double, end: Double) -> [(time: Double, angle: Double)] {
-            stride(from: start, through: end, by: 1.0 / 30).map { time in
+            // Ending exactly on `to`, which stepping by thirtieths can fall just short of.
+            stride(from: start, to: end, by: 1.0 / 30).map { time in
                 let x = (time - start) / (end - start)
                 return (time, (from + (to - from) * x * x * (3 - 2 * x)).rounded())
-            }
+            } + [(end, to)]
         }
-        return drag(from: 10, to: 30, start: 1.6, end: 2.6) + drag(from: 30, to: 10, start: 3.8, end: 4.8)
+        return drag(from: 70, to: 130, start: 1.6, end: 2.6) + drag(from: 130, to: 70, start: 3.8, end: 4.8)
     }
 
     /// Starts the scene, and writes the moment it starts (`CACurrentMediaTime`) to the file
@@ -64,7 +65,7 @@ enum DemoScene: String {
             for (time, angle) in Self.sliderSteps {
                 Task { @MainActor in
                     try? await Task.sleep(for: .seconds(1.6 + time))
-                    prefs.closeAngle = angle
+                    prefs.startAngle = angle
                 }
             }
             return

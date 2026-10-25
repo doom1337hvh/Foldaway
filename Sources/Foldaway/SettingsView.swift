@@ -110,11 +110,23 @@ private struct SettingsView: View {
                     }
                     LabeledContent {
                         HStack {
+                            Slider(value: $prefs.startAngle, in: Preferences.startAngles, step: 1)
+                                .frame(width: 120)
+                            Text(prefs.startsRightAway ? "Right away" : "\(Int(prefs.startAngle))°")
+                                .monospacedDigit()
+                                .frame(width: 68, alignment: .trailing)
+                        }
+                    } label: {
+                        Text("Starts at")
+                        Text("Above this lid angle, nothing happens. All the way right, it starts as soon as the lid moves.")
+                    }
+                    LabeledContent {
+                        HStack {
                             Slider(value: $prefs.closeAngle, in: Preferences.closeAngles, step: 1)
-                                .frame(width: 150)
+                                .frame(width: 120)
                             Text("\(Int(prefs.closeAngle))°")
                                 .monospacedDigit()
-                                .frame(width: 32, alignment: .trailing)
+                                .frame(width: 68, alignment: .trailing)
                         }
                     } label: {
                         Text("Screen is shut by")
